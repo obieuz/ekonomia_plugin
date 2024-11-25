@@ -1,0 +1,20 @@
+name: ekonomia_spiggot
+version: '1.0-SNAPSHOT'
+main: me.obieuz.ekonomia_spiggot.Ekonomia_spiggot
+api-version: '1.21'
+commands:
+  balance:
+    description: Shows the balance of the player
+    usage: /balance
+
+  deposit:
+    description: Deposit money into your account
+    usage: /deposit <amount>
+
+  pay:
+    description: Pay another player
+    usage: /pay <player> <amount>
+
+  sell:
+    description: Sell an item
+    usage: /sell <amount>
