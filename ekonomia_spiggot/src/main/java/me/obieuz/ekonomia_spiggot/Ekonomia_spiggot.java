@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
@@ -34,9 +35,12 @@ import java.util.UUID;
 
 public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
-    private final HashMap<UUID, Integer> playerValues = new HashMap<>();
-    private final HashMap<Material, Integer> itemValues = new HashMap<>();
+    private final HashMap<UUID, Double> playerValues = new HashMap<>();
+    private final HashMap<Material, Double> itemValues = new HashMap<>();
     private final HashMap<Location, HashMap<String, Object>> blockMetadata = new HashMap<>();
+    private final Double deathPenalty = 0.1;
+    private final Integer storeConstant = 1000;
+
     private File dataFile;
     private FileConfiguration dataConfig;
 
@@ -149,9 +153,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             Chest chest = (Chest) attachedBlock.getState();
 
             Integer amount = Integer.parseInt( block.getMetadata("amount").get(0).value().toString() );
-            Integer price = Integer.parseInt( block.getMetadata("price").get(0).value().toString() );
+            Double price = Double.parseDouble( block.getMetadata("price").get(0).value().toString() );
+
             String item = block.getMetadata("item").get(0).value().toString();
             String shopType =  block.getMetadata("shop_type").get(0).value().toString();
+
             UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
             if(creatorId.equals(player.getUniqueId())){
@@ -190,6 +196,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
                 Inventory playerInventory = player.getInventory();
 
                 if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
+
                     playerInventory.removeItem(new ItemStack(Material.getMaterial(item), amount));
                     playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + price);
 
@@ -225,8 +232,17 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+
+        double newBalance = playerValues.get(player.getUniqueId()) * (1 - deathPenalty);
+
+        playerValues.put(player.getUniqueId(), newBalance);
+    }
+
+    @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        playerValues.putIfAbsent(event.getPlayer().getUniqueId(), 0);
+        playerValues.putIfAbsent(event.getPlayer().getUniqueId(), 0.0);
     }
 
     @Override
@@ -240,100 +256,15 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         Player player = (Player) sender;
         UUID playerId = player.getUniqueId();
 
-        if (cmd.getName().equalsIgnoreCase("balance")) {
-            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()));
-            return true;
-        }
+        balance_command(cmd.getName(), player, playerId, args);
 
-        if (cmd.getName().equalsIgnoreCase("deposit")) {
-            if (args.length != 1) {
-                player.sendMessage("Usage: /deposit <amount>");
-                return true;
-            }
+        pay_command(cmd.getName(), player, playerId, args);
 
-            try {
-                int amount = Integer.parseInt(args[0]);
-                playerValues.put(playerId, playerValues.get(playerId) + amount);
-                player.sendMessage("Deposited " + amount + ". New balance: " + playerValues.get(playerId));
-            } catch (NumberFormatException e) {
-                player.sendMessage("Invalid amount. Please enter a number.");
-            }
-            return true;
-        }
+        sell_command(cmd.getName(), player, playerId, args);
 
-        if (cmd.getName().equalsIgnoreCase("pay")) {
-            if (args.length != 2) {
-                player.sendMessage("Usage: /pay <player> <amount>");
-                return true;
-            }
+        rynek_command(cmd.getName(), player, playerId, args);
 
-            try {
-                int amount = Integer.parseInt(args[1]);
-
-                int playerBalance = playerValues.get(playerId);
-
-                if(playerBalance < amount || amount < 0){
-                    player.sendMessage("You do not have enough money to pay that amount.");
-                    return true;
-                }
-
-                Player target_player = Bukkit.getPlayer(args[0]);
-
-                if(target_player == null){
-                    player.sendMessage("Player not found.");
-                    return true;
-                }
-
-                playerValues.put(playerId, playerValues.get(playerId) - amount);
-                playerValues.put(target_player.getUniqueId(), playerValues.get(target_player.getUniqueId()) + amount);
-
-                player.sendMessage("Paid " + amount + " to " + target_player.getName() + ". New balance: " + playerValues.get(playerId));
-            } catch (NumberFormatException e) {
-                player.sendMessage("Invalid amount. Please enter a number.");
-            }
-            return true;
-        }
-
-        if (cmd.getName().equalsIgnoreCase("sell")) {
-
-            if(args.length != 1){
-                player.sendMessage("Usage: /sell <amount>");
-                return true;
-            }
-
-            ItemStack itemInHand = player.getInventory().getItemInMainHand();
-
-            int amount = itemInHand.getAmount();
-
-            int sellAmount = Integer.parseInt(args[0]);
-
-            if(amount < sellAmount){
-                player.sendMessage("You do not have enough items to sell that amount.");
-                return true;
-            }
-
-            int value = itemValues.get(itemInHand.getType());
-
-            player.getInventory().removeItem(new ItemStack(itemInHand.getType(), sellAmount));
-
-            playerValues.put(playerId, playerValues.get(playerId) + (value * sellAmount));
-
-            player.sendMessage("Sold " + sellAmount + " " + itemInHand.getType() + " for " + (value * sellAmount) + ". New balance: " + playerValues.get(playerId));
-
-
-            return true;
-        }
-
-        if (cmd.getName().equalsIgnoreCase("rynek")) {
-            World world = Bukkit.getWorld("world");
-            Location cords_to_rynek = new Location(world,0, 60, 0);
-
-            player.teleport(cords_to_rynek);
-            player.sendMessage("Teleportacja przebiegła pomyślnie");
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     private void loadData(){
@@ -345,7 +276,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         dataConfig = YamlConfiguration.loadConfiguration(dataFile);
         for (String key : dataConfig.getKeys(false)) {
             UUID playerId = UUID.fromString(key);
-            int balance = dataConfig.getInt(key);
+            Double balance = dataConfig.getDouble(key);
             playerValues.put(playerId, balance);
         }
     }
@@ -427,11 +358,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
     private void InitializeItemValues()
     {
-        itemValues.put(Material.DIAMOND, 100);
-        itemValues.put(Material.GOLD_INGOT, 50);
-        itemValues.put(Material.IRON_INGOT, 25);
-        itemValues.put(Material.COAL, 10);
-        itemValues.put(Material.STICK, 1);
+        itemValues.put(Material.DIAMOND, 100.0);
+        itemValues.put(Material.GOLD_INGOT, 50.0);
+        itemValues.put(Material.IRON_INGOT, 25.0);
+        itemValues.put(Material.COAL, 10.0);
+        itemValues.put(Material.STICK, 1.0);
     }
     private void updateBalanceTab()
     {
@@ -444,20 +375,117 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
 
-        if (block.hasMetadata("shop")) {
-            block.removeMetadata("shop", this);
-            block.removeMetadata("shop_type", this);
-            block.removeMetadata("amount", this);
-            block.removeMetadata("price", this);
-            block.removeMetadata("item", this);
-            block.removeMetadata("creator", this);
+        Player player = event.getPlayer();
 
-            blockMetadata.remove(block.getLocation());
-        }
         if(block.hasMetadata("creator")){
-            block.removeMetadata("creator", this);
+            UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
-            blockMetadata.remove(block.getLocation());
+            if(!creatorId.equals(player.getUniqueId())){
+                player.sendMessage("You cannot break other player's shop.");
+                event.setCancelled(true);
+                return;
+            }
+
+            removeShop(block);
         }
+    }
+
+    private void removeShop(Block block){
+        block.removeMetadata("shop", this);
+        block.removeMetadata("shop_type", this);
+        block.removeMetadata("amount", this);
+        block.removeMetadata("price", this);
+        block.removeMetadata("item", this);
+        block.removeMetadata("creator", this);
+
+        blockMetadata.remove(block.getLocation());
+    }
+
+    private void balance_command(String command, Player player, UUID playerId, String[] args) {
+        if (command.equalsIgnoreCase("balance")) {
+            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()));
+        }
+    }
+
+    private void pay_command(String command, Player player, UUID playerId, String[] args) {
+        if(!command.equalsIgnoreCase("pay")){
+            return;
+        }
+        if (args.length != 2) {
+            player.sendMessage("Usage: /pay <player> <amount>");
+            return;
+        }
+
+        try {
+            int amount = Integer.parseInt(args[1]);
+
+            Double playerBalance = playerValues.get(playerId);
+
+            if(playerBalance < amount || amount < 0){
+                player.sendMessage("You do not have enough money to pay that amount.");
+                return;
+            }
+
+            Player target_player = Bukkit.getPlayer(args[0]);
+
+            if(target_player == null){
+                player.sendMessage("Player not found.");
+                return;
+            }
+
+            playerValues.put(playerId, playerValues.get(playerId) - amount);
+            playerValues.put(target_player.getUniqueId(), playerValues.get(target_player.getUniqueId()) + amount);
+
+            player.sendMessage("Paid " + amount + " to " + target_player.getName() + ". New balance: " + playerValues.get(playerId));
+        } catch (NumberFormatException e) {
+            player.sendMessage("Invalid amount. Please enter a number.");
+            return;
+        }
+    }
+
+    private void sell_command(String command, Player player, UUID playerId, String[] args) {
+        if(!command.equalsIgnoreCase("sell")){
+            return;
+        }
+        if(args.length != 1){
+            player.sendMessage("Usage: /sell <amount>");
+            return;
+        }
+
+        ItemStack itemInHand = player.getInventory().getItemInMainHand();
+
+        int amount = itemInHand.getAmount();
+
+        int sellAmount = Integer.parseInt(args[0]);
+
+        if(amount < sellAmount){
+            player.sendMessage("You do not have enough items to sell that amount.");
+            return;
+        }
+
+        Double value = itemValues.get(itemInHand.getType());
+
+        if(value == null){
+            value = 0.1;
+        }
+
+        player.getInventory().removeItem(new ItemStack(itemInHand.getType(), sellAmount));
+
+        playerValues.put(playerId, playerValues.get(playerId) + (value * sellAmount));
+
+        player.sendMessage("Sold " + sellAmount + " " + itemInHand.getType() + " for " + (value * sellAmount) + ". New balance: " + playerValues.get(playerId));
+
+
+        return;
+    }
+
+    private void rynek_command(String command, Player player, UUID playerId, String[] args) {
+        if (!command.equalsIgnoreCase("rynek")) {
+            return;
+        }
+        World world = Bukkit.getWorld("world");
+        Location cords_to_rynek = new Location(world,0, 60, 0);
+        player.teleport(cords_to_rynek);
+        player.sendMessage("Teleportacja przebiegła pomyślnie");
     }
 }

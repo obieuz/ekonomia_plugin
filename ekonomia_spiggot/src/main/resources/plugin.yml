@@ -7,10 +7,6 @@ commands:
     description: Shows the balance of the player
     usage: /balance
 
-  deposit:
-    description: Deposit money into your account
-    usage: /deposit <amount>
-
   pay:
     description: Pay another player
     usage: /pay <player> <amount>
@@ -18,6 +14,7 @@ commands:
   sell:
     description: Sell an item
     usage: /sell <amount>
+
   rynek:
     description: Teleports to the market
     usage: /rynek
