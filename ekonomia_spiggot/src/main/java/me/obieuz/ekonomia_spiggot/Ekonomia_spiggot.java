@@ -220,6 +220,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         InitializeItemValues();
         loadData();
         loadBlockMetadata();
+
+        Bukkit.getScheduler().scheduleSyncRepeatingTask(this, this::updateBalanceTab, 0, 20);
     }
 
     @EventHandler
@@ -322,6 +324,15 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             return true;
         }
 
+        if (cmd.getName().equalsIgnoreCase("rynek")) {
+            World world = Bukkit.getWorld("world");
+            Location cords_to_rynek = new Location(world,0, 60, 0);
+
+            player.teleport(cords_to_rynek);
+            player.sendMessage("Teleportacja przebiegła pomyślnie");
+            return true;
+        }
+
         return false;
     }
 
@@ -421,6 +432,12 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         itemValues.put(Material.IRON_INGOT, 25);
         itemValues.put(Material.COAL, 10);
         itemValues.put(Material.STICK, 1);
+    }
+    private void updateBalanceTab()
+    {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.setPlayerListName(player.getName() + " " + playerValues.get(player.getUniqueId()));
+        }
     }
 
     @EventHandler
