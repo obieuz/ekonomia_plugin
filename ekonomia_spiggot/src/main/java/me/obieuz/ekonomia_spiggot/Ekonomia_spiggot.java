@@ -571,6 +571,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         if (!command.equalsIgnoreCase("rynek")) {
             return;
         }
+        if(!player.getWorld().getName().equals("world")){
+            player.sendMessage("You can only use this command in the world.");
+            return;
+        }
+
         World world = Bukkit.getWorld("world");
         Location cords_to_rynek = new Location(world,0, 100, 0);
         player.teleport(cords_to_rynek);
