@@ -3,6 +3,7 @@ package me.obieuz.ekonomia_spiggot;
 import org.bukkit.*;
 import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Chest;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -13,6 +14,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -423,6 +425,24 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
 
             removeShop(block);
+        }
+    }
+
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Block block = event.getBlockPlaced();
+
+        if (block.getType() == Material.CHEST) {
+            for (BlockFace face : BlockFace.values()) {
+
+                Block adjacentBlock = block.getRelative(face);
+
+                if (adjacentBlock.getType() == Material.CHEST || adjacentBlock.hasMetadata("creator")) {
+                    event.getPlayer().sendMessage("You cannot place chests next to shop's chest.");
+                    event.setCancelled(true);
+                    break;
+                }
+            }
         }
     }
 
