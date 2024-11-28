@@ -136,7 +136,19 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             NamespacedKey key = new NamespacedKey(this,"amount");
             ItemMeta meta = itemInMainHand.getItemMeta();
 
-            player.sendMessage("You have "+meta.getPersistentDataContainer().get(key,PersistentDataType.INTEGER)+"$");
+            if(!meta.getPersistentDataContainer().has(key,PersistentDataType.INTEGER))
+            {
+                player.sendMessage("Failed to withdraw, take a screenshot and send to admin");
+                return;
+            }
+
+            int amount = meta.getPersistentDataContainer().get(key,PersistentDataType.INTEGER);
+
+            player.getInventory().removeItem(itemInMainHand);
+
+            playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + amount);
+
+            player.sendMessage("You withdraw "+amount+"$, now your balance is "+playerValues.get(player.getUniqueId()));
 
         }
 
@@ -387,7 +399,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     private void updateBalanceTab()
     {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            player.setPlayerListName(player.getName() + " " + playerValues.get(player.getUniqueId()));
+            Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+            player.setPlayerListName(player.getName() + " " + balance + "$");
         }
     }
 
@@ -433,7 +446,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
     private void balance_command(String command, Player player, UUID playerId, String[] args) {
         if (command.equalsIgnoreCase("balance")) {
-            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()));
+            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()) + "$");
         }
     }
 
@@ -467,6 +480,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             playerValues.put(target_player.getUniqueId(), playerValues.get(target_player.getUniqueId()) + amount);
 
             player.sendMessage("Paid " + amount + " to " + target_player.getName() + ". New balance: " + playerValues.get(playerId));
+            target_player.sendMessage("Received " + amount + " from " + player.getName() + ". New balance: " + playerValues.get(target_player.getUniqueId()));
         } catch (NumberFormatException e) {
             player.sendMessage("Invalid amount. Please enter a number.");
             return;
@@ -477,14 +491,33 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         if(!command.equalsIgnoreCase("sell")){
             return;
         }
+        ItemStack itemInHand = player.getInventory().getItemInMainHand();
+
         if(args.length != 1){
-            player.sendMessage("Usage: /sell <amount>");
+            int amount = itemInHand.getAmount();
+
+            Double value = itemValues.get(itemInHand.getType());
+
+            if(value == null){
+                value = 0.1;
+            }
+
+            player.getInventory().removeItem(new ItemStack(itemInHand.getType(), amount));
+
+            playerValues.put(playerId, playerValues.get(playerId) + (value * amount));
+
+            player.sendMessage("Sold " + amount + " " + itemInHand.getType() + " for " + (value * amount) + ". New balance: " + playerValues.get(playerId));
+
             return;
         }
 
-        ItemStack itemInHand = player.getInventory().getItemInMainHand();
+        int totalAmount = 0;
 
-        int amount = itemInHand.getAmount();
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (item != null && item.getType() == itemInHand.getType()) {
+                totalAmount += item.getAmount();
+            }
+        }
 
         int sellAmount = Integer.parseInt(args[0]);
 
@@ -493,7 +526,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             return;
         }
 
-        if(amount < sellAmount){
+        if(totalAmount < sellAmount){
             player.sendMessage("You do not have enough items to sell that amount.");
             return;
         }
