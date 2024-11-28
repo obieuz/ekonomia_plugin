@@ -1,9 +1,7 @@
 package me.obieuz.ekonomia_spiggot;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.command.Command;
@@ -21,7 +19,10 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.awt.*;
@@ -38,6 +39,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     private final HashMap<UUID, Double> playerValues = new HashMap<>();
     private final HashMap<Material, Double> itemValues = new HashMap<>();
     private final HashMap<Location, HashMap<String, Object>> blockMetadata = new HashMap<>();
+
     private final Double deathPenalty = 0.1;
     private final Integer storeConstant = 1000;
 
@@ -81,6 +83,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         String amount = lines[1].split(" ")[1];
 
+        if(!amount.matches("\\d+"))
+        {
+            player.sendMessage("Amount should be a number");
+        }
+
         if(shopType.equals("buy")){
             block.setMetadata("shop_type", new FixedMetadataValue(this, "buy"));
         }
@@ -122,6 +129,16 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         Block block = event.getClickedBlock();
+        ItemStack itemInMainHand = player.getInventory().getItemInMainHand();
+
+        if(itemInMainHand.getType() == Material.PAPER)
+        {
+            NamespacedKey key = new NamespacedKey(this,"amount");
+            ItemMeta meta = itemInMainHand.getItemMeta();
+
+            player.sendMessage("You have "+meta.getPersistentDataContainer().get(key,PersistentDataType.INTEGER)+"$");
+
+        }
 
         if(block == null){
             return;
@@ -255,14 +272,17 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         Player player = (Player) sender;
         UUID playerId = player.getUniqueId();
+        String command_type = cmd.getName();
 
-        balance_command(cmd.getName(), player, playerId, args);
+        balance_command(command_type, player, playerId, args);
 
-        pay_command(cmd.getName(), player, playerId, args);
+        pay_command(command_type, player, playerId, args);
 
-        sell_command(cmd.getName(), player, playerId, args);
+        sell_command(command_type, player, playerId, args);
 
-        rynek_command(cmd.getName(), player, playerId, args);
+        rynek_command(command_type, player, playerId, args);
+
+        withdraw_command(command_type, player, playerId, args);
 
         return true;
     }
@@ -380,10 +400,13 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         if(block.hasMetadata("creator")){
             UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
-            if(!creatorId.equals(player.getUniqueId())){
-                player.sendMessage("You cannot break other player's shop.");
-                event.setCancelled(true);
-                return;
+            if(player.getGameMode() != GameMode.CREATIVE)
+            {
+                if(!creatorId.equals(player.getUniqueId())){
+                    player.sendMessage("You cannot break other player's shop.");
+                    event.setCancelled(true);
+                    return;
+                }
             }
 
             removeShop(block);
@@ -397,6 +420,13 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         block.removeMetadata("price", this);
         block.removeMetadata("item", this);
         block.removeMetadata("creator", this);
+
+        if(block.getType() == Material.OAK_WALL_SIGN || block.getType() ==  Material.SPRUCE_WALL_SIGN || block.getType() ==  Material.BIRCH_WALL_SIGN || block.getType() ==  Material.JUNGLE_WALL_SIGN || block.getType() ==  Material.ACACIA_WALL_SIGN || block.getType() ==  Material.DARK_OAK_WALL_SIGN){
+            Block attachedBlock = block.getRelative(((org.bukkit.block.data.type.WallSign) block.getBlockData()).getFacing().getOppositeFace());
+            attachedBlock.removeMetadata("creator",this);
+
+            blockMetadata.remove(attachedBlock.getLocation());
+        }
 
         blockMetadata.remove(block.getLocation());
     }
@@ -458,6 +488,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         int sellAmount = Integer.parseInt(args[0]);
 
+        if(sellAmount < 0) {
+            player.kickPlayer("MAM CIE HUJKU");
+            return;
+        }
+
         if(amount < sellAmount){
             player.sendMessage("You do not have enough items to sell that amount.");
             return;
@@ -484,8 +519,49 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             return;
         }
         World world = Bukkit.getWorld("world");
-        Location cords_to_rynek = new Location(world,0, 60, 0);
+        Location cords_to_rynek = new Location(world,0, 100, 0);
         player.teleport(cords_to_rynek);
         player.sendMessage("Teleportacja przebiegła pomyślnie");
+    }
+
+    private void withdraw_command(String command, Player player, UUID playerId, String[] args) {
+        if (!command.equalsIgnoreCase("withdraw")) {
+            return;
+        }
+
+        if (!args[0].matches("\\d+")) {
+            player.sendMessage("Amount to withdraw should be a number");
+            return;
+        }
+
+        int amount = Integer.parseInt(args[0]);
+
+        if(amount < 0 || playerValues.get(playerId) < amount) {
+            player.sendMessage("You are too poor to withdraw this amount");
+            return;
+        }
+
+        ItemStack item = new ItemStack(Material.PAPER);
+
+        ItemMeta meta = item.getItemMeta();
+
+        if(meta == null) {
+            player.sendMessage("Failed to withdraw, take a screenshot and send to admin");
+            return;
+        }
+
+        meta.setDisplayName(amount + "$");
+
+        NamespacedKey key = new NamespacedKey(this,"amount");
+
+        meta.getPersistentDataContainer().set(key, PersistentDataType.INTEGER, amount);
+
+        item.setItemMeta(meta);
+
+        player.getInventory().addItem(item);
+
+        playerValues.put(playerId, playerValues.get(playerId) - amount);
+
+        player.sendMessage("You withdraw "+amount+"$, now your balance is "+playerValues.get(playerId));
     }
 }
