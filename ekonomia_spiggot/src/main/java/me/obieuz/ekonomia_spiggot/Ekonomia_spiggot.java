@@ -437,7 +437,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
                 Block adjacentBlock = block.getRelative(face);
 
-                if (adjacentBlock.getType() == Material.CHEST || adjacentBlock.hasMetadata("creator")) {
+                if (adjacentBlock.getType() == Material.CHEST && adjacentBlock.hasMetadata("creator")) {
                     event.getPlayer().sendMessage("You cannot place chests next to shop's chest.");
                     event.setCancelled(true);
                     break;
