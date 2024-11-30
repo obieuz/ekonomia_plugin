@@ -444,6 +444,19 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
                 }
             }
         }
+        
+        if (block.getType() == Material.HOPPER) {
+            for (BlockFace face : BlockFace.values()) 
+
+                Block adjacentBlock = block.getRelative(face);
+
+                if (adjacentBlock.getType() == Material.CHEST && adjacentBlock.hasMetadata("creator")) {
+                    event.getPlayer().sendMessage("You cannot place hoppers next to shop's chest.");
+                    event.setCancelled(true);
+                    break;
+                }
+            }
+        }
     }
 
     private void removeShop(Block block){
