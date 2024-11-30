@@ -19,6 +19,7 @@ import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -634,5 +635,15 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         playerValues.put(playerId, playerValues.get(playerId) - amount);
 
         player.sendMessage("You withdraw "+amount+"$, now your balance is "+playerValues.get(playerId));
+    }
+@EventHandler 
+    public void onEntityExplode(EntityExplodeEvent event)
+    {
+        for(Block block : event.blockList())
+        {
+             if(block.hasMetadata("creator")){
+                 event.blockList().removeAll(block);
+             }
+        }
     }
 }
