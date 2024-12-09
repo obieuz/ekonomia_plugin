@@ -34,10 +34,8 @@ import java.awt.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
@@ -56,11 +54,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
         String[] lines = event.getLines();
 
-        if(event.getBlock().hasMetadata("shop")) {
+        if(event.getBlock().hasMetadata("shop")){
             return;
         }
 
-        if (!lines[0].equals("[shop]")) {
+        if (!lines[0].equals("[shop]") && !lines[0].equals("[admin_shop]")) {
             return;
         }
 
@@ -87,6 +85,13 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         String shopType =lines[1].split(" ")[0];
 
         String amount = lines[1].split(" ")[1];
+
+        if(lines[0].equals("[admin_shop]") && player.getGameMode() != GameMode.CREATIVE)
+        {
+            player.sendMessage("You cannot create admin shop in survival mode.");
+            event.setCancelled(true);
+            return;
+        }
 
         if(!amount.matches("\\d+"))
         {
@@ -124,6 +129,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         }});
 
         String finalItem = item;
+
         blockMetadata.put(block.getLocation(), new HashMap<>() {{
             put("shop", true);
             put("shop_type", shopType);
@@ -132,6 +138,29 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             put("item", finalItem);
             put("creator", player.getUniqueId().toString());
         }});
+
+        if(lines[0].equals("[admin_shop]"))
+        {
+            block.setMetadata("admin_shop", new FixedMetadataValue(this, true));
+            blockMetadata.put(block.getLocation(), new HashMap<>() {{
+                put("shop", true);
+                put("shop_type", shopType);
+                put("amount", amount);
+                put("price", price);
+                put("item", finalItem);
+                put("creator", player.getUniqueId().toString());
+                put("admin_shop", true);
+            }});
+
+            chest.setMetadata("admin_shop", new FixedMetadataValue(this, true));
+            blockMetadata.put(chest.getLocation(), new HashMap<>() {{
+                put("creator", player.getUniqueId().toString());
+                put("admin_shop", true);
+            }});
+
+            player.sendMessage("Admin shop created! "+ shopType + "ing " + amount + " " + item + " for " + price);
+            return;
+        }
 
         player.sendMessage("Shop created! You are "+ shopType + "ing " + amount + " " + item + " for " + price);
     }
@@ -187,7 +216,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             if(event.getAction() != Action.RIGHT_CLICK_BLOCK){
                 return;
             }
-            if(!block.hasMetadata("shop") && !block.hasMetadata("admin_shop")){
+
+            if(!block.hasMetadata("shop")){
                 return;
             }
 
@@ -202,7 +232,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
             UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
-            if(creatorId.equals(player.getUniqueId())){
+            if(creatorId.equals(player.getUniqueId()) && !block.hasMetadata("admin_shop")){
                 player.sendMessage("You cannot buy from your own shop.");
                 event.setCancelled(true);
                 return;
@@ -212,6 +242,18 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             {
                 if(playerValues.get(player.getUniqueId()) < price){
                     player.sendMessage("You do not have enough money to buy this item.");
+                    event.setCancelled(true);
+                    return;
+                }
+
+                //admin shop buying
+                if(block.hasMetadata("admin_shop"))
+                {
+                    player.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
+                    playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) - price);
+
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + balance);
                     event.setCancelled(true);
                     return;
                 }
@@ -229,7 +271,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
                     player.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
 
-                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + playerValues.get(player.getUniqueId()));
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + balance);
                 }
                 else{
                     player.sendMessage("Shop does not have enough items to sell.");
@@ -237,12 +280,36 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
             else if(shopType.contains("sell"))
             {
-                if(playerValues.get(creatorId) < price){
-                player.sendMessage("Owner do not have enough money to buy this item from you");
-                event.setCancelled(true);
-                return;
-            }
+                if(!block.hasMetadata("admin_shop"))
+                {
+                    if(playerValues.get(creatorId) < price)
+                    {
+                        player.sendMessage("Owner do not have enough money to buy this item from you");
+                        event.setCancelled(true);
+                        return;
+                    }
+                }
+
                 Inventory playerInventory = player.getInventory();
+
+                //admin shop sprzedawanie
+                if(block.hasMetadata("admin_shop"))
+                {
+                    if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
+                        player.getInventory().removeItem(new ItemStack(Material.getMaterial(item), amount));
+                        playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + price);
+
+                        Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                        player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + balance);
+                        event.setCancelled(true);
+                        return;
+                    }
+                    else{
+                        player.sendMessage("You do not have enough items to sell.");
+                        event.setCancelled(true);
+                        return;
+                    }
+                }
 
                 if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
 
@@ -253,11 +320,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
                     chest.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
 
-                    player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + playerValues.get(player.getUniqueId()));
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + balance);
                 }
                 else{
                     player.sendMessage("You do not have enough items to sell.");
-                    event.setCancelled(true);
                 }
             }
             event.setCancelled(true);
@@ -439,6 +506,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
             if(player.getGameMode() != GameMode.CREATIVE)
             {
+                if(block.hasMetadata("admin_shop")){
+                    player.sendMessage("You cannot break admin shop.");
+                    event.setCancelled(true);
+                    return;
+                }
                 if(!creatorId.equals(player.getUniqueId())){
                     player.sendMessage("You cannot break other player's shop.");
                     event.setCancelled(true);
