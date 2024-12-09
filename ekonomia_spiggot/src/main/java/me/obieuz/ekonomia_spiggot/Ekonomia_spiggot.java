@@ -723,9 +723,9 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     {
         for(Block block : event.blockList())
         {
-             if(block.hasMetadata("creator")){
-                 event.blockList().remove(block);
-             }
+            if(block.hasMetadata("creator")){
+                event.blockList().remove(block);
+            }
         }
     }
     @EventHandler
