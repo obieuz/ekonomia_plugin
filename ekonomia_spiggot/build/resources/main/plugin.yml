@@ -18,3 +18,7 @@ commands:
   rynek:
     description: Teleports to the market
     usage: /rynek
+
+  withdraw:
+    description: Withdraw currency from a bank into a bill
+    usage: /withdraw <amount>

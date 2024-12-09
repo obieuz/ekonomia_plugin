@@ -1,10 +1,9 @@
 package me.obieuz.ekonomia_spiggot;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
+import org.bukkit.attribute.AttributeModifier;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Chest;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -15,29 +14,35 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.awt.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
     private final HashMap<UUID, Double> playerValues = new HashMap<>();
     private final HashMap<Material, Double> itemValues = new HashMap<>();
     private final HashMap<Location, HashMap<String, Object>> blockMetadata = new HashMap<>();
+
     private final Double deathPenalty = 0.1;
     private final Integer storeConstant = 1000;
 
@@ -49,16 +54,16 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
         String[] lines = event.getLines();
 
-        if(event.getBlock().hasMetadata("shop")) {
+        if(event.getBlock().hasMetadata("shop")){
             return;
         }
 
-        if (!lines[0].equals("[shop]")) {
+        if (!lines[0].equals("[shop]") && !lines[0].equals("[admin_shop]")) {
             return;
         }
 
-        if(lines.length < 4){
-            player.sendMessage("Every shop should contains 4 lines. Check the docs.");
+        if(lines.length < 3){
+            player.sendMessage("Every shop should contains 3 lines. Check the docs.");
             return;
         }
 
@@ -81,6 +86,18 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         String amount = lines[1].split(" ")[1];
 
+        if(lines[0].equals("[admin_shop]") && player.getGameMode() != GameMode.CREATIVE)
+        {
+            player.sendMessage("You cannot create admin shop in survival mode.");
+            event.setCancelled(true);
+            return;
+        }
+
+        if(!amount.matches("\\d+"))
+        {
+            player.sendMessage("Amount should be a number");
+        }
+
         if(shopType.equals("buy")){
             block.setMetadata("shop_type", new FixedMetadataValue(this, "buy"));
         }
@@ -97,6 +114,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         block.setMetadata("price", new FixedMetadataValue(this, price));
 
         String item = lines[3];
+        if(item.equals("")){
+            item = player.getInventory().getItemInMainHand().getType().toString();
+        }
+        lines[3] = item;
+
         block.setMetadata("item", new FixedMetadataValue(this, item));
 
         chest.setMetadata("creator", new FixedMetadataValue(this, player.getUniqueId()));
@@ -106,14 +128,39 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             put("creator", player.getUniqueId().toString());
         }});
 
+        String finalItem = item;
+
         blockMetadata.put(block.getLocation(), new HashMap<>() {{
             put("shop", true);
             put("shop_type", shopType);
             put("amount", amount);
             put("price", price);
-            put("item", item);
+            put("item", finalItem);
             put("creator", player.getUniqueId().toString());
         }});
+
+        if(lines[0].equals("[admin_shop]"))
+        {
+            block.setMetadata("admin_shop", new FixedMetadataValue(this, true));
+            blockMetadata.put(block.getLocation(), new HashMap<>() {{
+                put("shop", true);
+                put("shop_type", shopType);
+                put("amount", amount);
+                put("price", price);
+                put("item", finalItem);
+                put("creator", player.getUniqueId().toString());
+                put("admin_shop", true);
+            }});
+
+            chest.setMetadata("admin_shop", new FixedMetadataValue(this, true));
+            blockMetadata.put(chest.getLocation(), new HashMap<>() {{
+                put("creator", player.getUniqueId().toString());
+                put("admin_shop", true);
+            }});
+
+            player.sendMessage("Admin shop created! "+ shopType + "ing " + amount + " " + item + " for " + price);
+            return;
+        }
 
         player.sendMessage("Shop created! You are "+ shopType + "ing " + amount + " " + item + " for " + price);
     }
@@ -122,6 +169,30 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         Block block = event.getClickedBlock();
+        ItemStack itemInMainHand = player.getInventory().getItemInMainHand();
+
+        if(itemInMainHand.getType() == Material.PAPER)
+        {
+            NamespacedKey key = new NamespacedKey(this,"amount");
+            ItemMeta meta = itemInMainHand.getItemMeta();
+
+            if(!meta.getPersistentDataContainer().has(key,PersistentDataType.INTEGER))
+            {
+                player.sendMessage("Failed to withdraw, take a screenshot and send to admin");
+                return;
+            }
+
+            int amount = meta.getPersistentDataContainer().get(key,PersistentDataType.INTEGER);
+
+            player.getInventory().removeItem(itemInMainHand);
+
+            playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + amount);
+
+            Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+
+            player.sendMessage("You deposited "+amount+"$, now your balance is "+balance);
+
+        }
 
         if(block == null){
             return;
@@ -145,6 +216,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             if(event.getAction() != Action.RIGHT_CLICK_BLOCK){
                 return;
             }
+
             if(!block.hasMetadata("shop")){
                 return;
             }
@@ -160,7 +232,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
             UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
-            if(creatorId.equals(player.getUniqueId())){
+            if(creatorId.equals(player.getUniqueId()) && !block.hasMetadata("admin_shop")){
                 player.sendMessage("You cannot buy from your own shop.");
                 event.setCancelled(true);
                 return;
@@ -174,9 +246,23 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
                     return;
                 }
 
+                //admin shop buying
+                if(block.hasMetadata("admin_shop"))
+                {
+                    player.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
+                    playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) - price);
+
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + balance);
+                    event.setCancelled(true);
+                    return;
+                }
+
                 Inventory chestInventory = chest.getInventory();
 
                 if(chestInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
+
+
                     chestInventory.removeItem(new ItemStack(Material.getMaterial(item), amount));
 
                     playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) - price);
@@ -185,7 +271,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
                     player.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
 
-                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + playerValues.get(player.getUniqueId()));
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Bought " + amount + " " + item + " for " + price + ". New balance: " + balance);
                 }
                 else{
                     player.sendMessage("Shop does not have enough items to sell.");
@@ -193,7 +280,36 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
             else if(shopType.contains("sell"))
             {
+                if(!block.hasMetadata("admin_shop"))
+                {
+                    if(playerValues.get(creatorId) < price)
+                    {
+                        player.sendMessage("Owner do not have enough money to buy this item from you");
+                        event.setCancelled(true);
+                        return;
+                    }
+                }
+
                 Inventory playerInventory = player.getInventory();
+
+                //admin shop sprzedawanie
+                if(block.hasMetadata("admin_shop"))
+                {
+                    if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
+                        player.getInventory().removeItem(new ItemStack(Material.getMaterial(item), amount));
+                        playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + price);
+
+                        Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                        player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + balance);
+                        event.setCancelled(true);
+                        return;
+                    }
+                    else{
+                        player.sendMessage("You do not have enough items to sell.");
+                        event.setCancelled(true);
+                        return;
+                    }
+                }
 
                 if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
 
@@ -204,15 +320,17 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
                     chest.getInventory().addItem(new ItemStack(Material.getMaterial(item), amount));
 
-                    player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + playerValues.get(player.getUniqueId()));
+                    Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+                    player.sendMessage("Sold " + amount + " " + item + " for " + price + ". New balance: " + balance);
                 }
                 else{
                     player.sendMessage("You do not have enough items to sell.");
-                    event.setCancelled(true);
                 }
             }
             event.setCancelled(true);
         }
+
+
     }
 
     @Override
@@ -224,7 +342,6 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
-        InitializeItemValues();
         loadData();
         loadBlockMetadata();
 
@@ -255,14 +372,15 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         Player player = (Player) sender;
         UUID playerId = player.getUniqueId();
+        String command_type = cmd.getName();
 
-        balance_command(cmd.getName(), player, playerId, args);
+        balance_command(command_type, player, playerId, args);
 
-        pay_command(cmd.getName(), player, playerId, args);
+        pay_command(command_type, player, playerId, args);
 
-        sell_command(cmd.getName(), player, playerId, args);
+        rynek_command(command_type, player, playerId, args);
 
-        rynek_command(cmd.getName(), player, playerId, args);
+        withdraw_command(command_type, player, playerId, args);
 
         return true;
     }
@@ -356,18 +474,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         }
     }
 
-    private void InitializeItemValues()
-    {
-        itemValues.put(Material.DIAMOND, 100.0);
-        itemValues.put(Material.GOLD_INGOT, 50.0);
-        itemValues.put(Material.IRON_INGOT, 25.0);
-        itemValues.put(Material.COAL, 10.0);
-        itemValues.put(Material.STICK, 1.0);
-    }
     private void updateBalanceTab()
     {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            player.setPlayerListName(player.getName() + " " + playerValues.get(player.getUniqueId()));
+            Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+            player.setPlayerListName(player.getName() + " " + balance + "$");
         }
     }
 
@@ -380,13 +491,39 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         if(block.hasMetadata("creator")){
             UUID creatorId = UUID.fromString(block.getMetadata("creator").get(0).value().toString());
 
-            if(!creatorId.equals(player.getUniqueId())){
-                player.sendMessage("You cannot break other player's shop.");
-                event.setCancelled(true);
-                return;
+            if(player.getGameMode() != GameMode.CREATIVE)
+            {
+                if(block.hasMetadata("admin_shop")){
+                    player.sendMessage("You cannot break admin shop.");
+                    event.setCancelled(true);
+                    return;
+                }
+                if(!creatorId.equals(player.getUniqueId())){
+                    player.sendMessage("You cannot break other player's shop.");
+                    event.setCancelled(true);
+                    return;
+                }
             }
 
             removeShop(block);
+        }
+    }
+
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Block block = event.getBlockPlaced();
+
+        if (block.getType() == Material.CHEST) {
+            for (BlockFace face : BlockFace.values()) {
+
+                Block adjacentBlock = block.getRelative(face);
+
+                if (adjacentBlock.getType() == Material.CHEST && adjacentBlock.hasMetadata("creator")) {
+                    event.getPlayer().sendMessage("You cannot place chests next to shop's chest.");
+                    event.setCancelled(true);
+                    break;
+                }
+            }
         }
     }
 
@@ -398,12 +535,19 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         block.removeMetadata("item", this);
         block.removeMetadata("creator", this);
 
+        if(block.getType() == Material.OAK_WALL_SIGN || block.getType() ==  Material.SPRUCE_WALL_SIGN || block.getType() ==  Material.BIRCH_WALL_SIGN || block.getType() ==  Material.JUNGLE_WALL_SIGN || block.getType() ==  Material.ACACIA_WALL_SIGN || block.getType() ==  Material.DARK_OAK_WALL_SIGN){
+            Block attachedBlock = block.getRelative(((org.bukkit.block.data.type.WallSign) block.getBlockData()).getFacing().getOppositeFace());
+            attachedBlock.removeMetadata("creator",this);
+
+            blockMetadata.remove(attachedBlock.getLocation());
+        }
+
         blockMetadata.remove(block.getLocation());
     }
 
     private void balance_command(String command, Player player, UUID playerId, String[] args) {
         if (command.equalsIgnoreCase("balance")) {
-            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()));
+            player.sendMessage("Your balance is: " + playerValues.get(player.getUniqueId()) + "$");
         }
     }
 
@@ -437,55 +581,103 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             playerValues.put(target_player.getUniqueId(), playerValues.get(target_player.getUniqueId()) + amount);
 
             player.sendMessage("Paid " + amount + " to " + target_player.getName() + ". New balance: " + playerValues.get(playerId));
+            target_player.sendMessage("Received " + amount + " from " + player.getName() + ". New balance: " + playerValues.get(target_player.getUniqueId()));
         } catch (NumberFormatException e) {
             player.sendMessage("Invalid amount. Please enter a number.");
             return;
         }
     }
 
-    private void sell_command(String command, Player player, UUID playerId, String[] args) {
-        if(!command.equalsIgnoreCase("sell")){
-            return;
-        }
-        if(args.length != 1){
-            player.sendMessage("Usage: /sell <amount>");
-            return;
-        }
-
-        ItemStack itemInHand = player.getInventory().getItemInMainHand();
-
-        int amount = itemInHand.getAmount();
-
-        int sellAmount = Integer.parseInt(args[0]);
-
-        if(amount < sellAmount){
-            player.sendMessage("You do not have enough items to sell that amount.");
-            return;
-        }
-
-        Double value = itemValues.get(itemInHand.getType());
-
-        if(value == null){
-            value = 0.1;
-        }
-
-        player.getInventory().removeItem(new ItemStack(itemInHand.getType(), sellAmount));
-
-        playerValues.put(playerId, playerValues.get(playerId) + (value * sellAmount));
-
-        player.sendMessage("Sold " + sellAmount + " " + itemInHand.getType() + " for " + (value * sellAmount) + ". New balance: " + playerValues.get(playerId));
-
-
-        return;
-    }
-
     private void rynek_command(String command, Player player, UUID playerId, String[] args) {
         if (!command.equalsIgnoreCase("rynek")) {
             return;
         }
+        if(!player.getWorld().getName().equals("world")){
+            player.sendMessage("You can only use this command in the world.");
+            return;
+        }
+
         World world = Bukkit.getWorld("world");
-        Location cords_to_rynek = new Location(world,0, 60, 0);
+        Location cords_to_rynek = new Location(world,0, 100, 0);
         player.teleport(cords_to_rynek);
         player.sendMessage("Teleportacja przebiegła pomyślnie");
+    }
+
+    private void withdraw_command(String command, Player player, UUID playerId, String[] args) {
+        if (!command.equalsIgnoreCase("withdraw")) {
+            return;
+        }
+
+        if (!args[0].matches("\\d+")) {
+            player.sendMessage("Amount to withdraw should be a number");
+            return;
+        }
+
+        int amount = Integer.parseInt(args[0]);
+
+        if(amount < 0 || playerValues.get(playerId) < amount) {
+            player.sendMessage("You are too poor to withdraw this amount");
+            return;
+        }
+
+        ItemStack item = new ItemStack(Material.PAPER);
+
+        ItemMeta meta = item.getItemMeta();
+
+        if(meta == null) {
+            player.sendMessage("Failed to withdraw, take a screenshot and send to admin");
+            return;
+        }
+
+        meta.setDisplayName(amount + "$");
+
+        NamespacedKey key = new NamespacedKey(this,"amount");
+
+        meta.getPersistentDataContainer().set(key, PersistentDataType.INTEGER, amount);
+
+        item.setItemMeta(meta);
+
+        player.getInventory().addItem(item);
+
+        playerValues.put(playerId, playerValues.get(playerId) - amount);
+
+        Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+
+        player.sendMessage("You withdrew "+amount+"$, now your balance is "+balance);
+    }
+    @EventHandler
+    public void onEntityExplode(EntityExplodeEvent event)
+    {
+        for(Block block : event.blockList())
+        {
+            if(block.hasMetadata("creator")){
+                event.blockList().remove(block);
+            }
+        }
+    }
+    @EventHandler
+    public void InventoryMoveItemEvent(InventoryMoveItemEvent event)
+    {
+        if(event.getSource().getType().equals(InventoryType.CHEST))
+        {
+            Chest chest = (Chest) event.getSource().getHolder();
+            if(!chest.hasMetadata("creator"))
+            {
+                return;
+            }
+            event.setCancelled(true);
+            return;
+        }
+
+        if(event.getDestination().getType().equals(InventoryType.CHEST))
+        {
+            Chest chest = (Chest) event.getDestination().getHolder();
+            if(!chest.hasMetadata("creator"))
+            {
+                return;
+            }
+            event.setCancelled(true);
+            return;
+        }
     }
 }
