@@ -342,7 +342,6 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
-        InitializeItemValues();
         loadData();
         loadBlockMetadata();
 
@@ -378,8 +377,6 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         balance_command(command_type, player, playerId, args);
 
         pay_command(command_type, player, playerId, args);
-
-        sell_command(command_type, player, playerId, args);
 
         rynek_command(command_type, player, playerId, args);
 
@@ -477,16 +474,6 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         }
     }
 
-    private void InitializeItemValues()
-    {
-        itemValues.put(Material.BAKED_POTATO, 0.2);
-        itemValues.put(Material.GOLDEN_CARROT, 2.5);
-        itemValues.put(Material.LEATHER, 1.0);
-        itemValues.put(Material.SLIME_BLOCK, 9.0);
-        itemValues.put(Material.COOKED_MUTTON, 1.0);
-        itemValues.put(Material.RED_MUSHROOM, 0.6);
-        itemValues.put(Material.DIAMOND, 3.0);
-    }
     private void updateBalanceTab()
     {
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -599,66 +586,6 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             player.sendMessage("Invalid amount. Please enter a number.");
             return;
         }
-    }
-
-    private void sell_command(String command, Player player, UUID playerId, String[] args) {
-        if(!command.equalsIgnoreCase("sell")){
-            return;
-        }
-        ItemStack itemInHand = player.getInventory().getItemInMainHand();
-
-        if(args.length != 1){
-            int amount = itemInHand.getAmount();
-
-            Double value = itemValues.get(itemInHand.getType());
-
-            if(value == null){
-                value = 0.1;
-            }
-
-            player.getInventory().removeItem(new ItemStack(itemInHand.getType(), amount));
-
-            playerValues.put(playerId, playerValues.get(playerId) + (value * amount));
-
-            player.sendMessage("Sold " + amount + " " + itemInHand.getType() + " for " + (value * amount) + ". New balance: " + playerValues.get(playerId));
-
-            return;
-        }
-
-        int totalAmount = 0;
-
-        for (ItemStack item : player.getInventory().getContents()) {
-            if (item != null && item.getType() == itemInHand.getType()) {
-                totalAmount += item.getAmount();
-            }
-        }
-
-        int sellAmount = Integer.parseInt(args[0]);
-
-        if(sellAmount < 0) {
-            player.kickPlayer("MAM CIE HUJKU");
-            return;
-        }
-
-        if(totalAmount < sellAmount){
-            player.sendMessage("You do not have enough items to sell that amount.");
-            return;
-        }
-
-        Double value = itemValues.get(itemInHand.getType());
-
-        if(value == null){
-            value = 0.1;
-        }
-
-        player.getInventory().removeItem(new ItemStack(itemInHand.getType(), sellAmount));
-
-        playerValues.put(playerId, playerValues.get(playerId) + (value * sellAmount));
-
-        player.sendMessage("Sold " + sellAmount + " " + itemInHand.getType() + " for " + (value * sellAmount) + ". New balance: " + playerValues.get(playerId));
-
-
-        return;
     }
 
     private void rynek_command(String command, Player player, UUID playerId, String[] args) {
