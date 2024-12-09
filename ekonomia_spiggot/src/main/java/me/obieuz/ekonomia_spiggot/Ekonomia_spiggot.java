@@ -447,7 +447,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         }
         
         if (block.getType() == Material.HOPPER) {
-            for (BlockFace face : BlockFace.values()) 
+            for (BlockFace face : BlockFace.values()) {
 
                 Block adjacentBlock = block.getRelative(face);
 
@@ -642,7 +642,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         for(Block block : event.blockList())
         {
              if(block.hasMetadata("creator")){
-                 event.blockList().removeAll(block);
+                 event.blockList().remove(block);
              }
         }
     }
