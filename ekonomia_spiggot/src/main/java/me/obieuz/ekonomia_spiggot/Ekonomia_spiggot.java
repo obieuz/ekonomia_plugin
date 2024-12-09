@@ -17,6 +17,8 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
@@ -402,11 +404,13 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
     private void InitializeItemValues()
     {
-        itemValues.put(Material.DIAMOND, 100.0);
-        itemValues.put(Material.GOLD_INGOT, 50.0);
-        itemValues.put(Material.IRON_INGOT, 25.0);
-        itemValues.put(Material.COAL, 10.0);
-        itemValues.put(Material.STICK, 1.0);
+        itemValues.put(Material.BAKED_POTATO, 0.2);
+        itemValues.put(Material.GOLDEN_CARROT, 2.5);
+        itemValues.put(Material.LEATHER, 1.0);
+        itemValues.put(Material.SLIME_BLOCK, 9.0);
+        itemValues.put(Material.COOKED_MUTTON, 1.0);
+        itemValues.put(Material.RED_MUSHROOM, 0.6);
+        itemValues.put(Material.DIAMOND, 3.0);
     }
     private void updateBalanceTab()
     {
@@ -455,18 +459,18 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
         }
         
-        if (block.getType() == Material.HOPPER) {
-            for (BlockFace face : BlockFace.values()) {
-
-                Block adjacentBlock = block.getRelative(face);
-
-                if (adjacentBlock.getType() == Material.CHEST && adjacentBlock.hasMetadata("creator")) {
-                    event.getPlayer().sendMessage("You cannot place hoppers next to shop's chest.");
-                    event.setCancelled(true);
-                    break;
-                }
-            }
-        }
+//        if (block.getType() == Material.HOPPER) {
+//            for (BlockFace face : BlockFace.values()) {
+//
+//                Block adjacentBlock = block.getRelative(face);
+//
+//                if (adjacentBlock.getType() == Material.CHEST && adjacentBlock.hasMetadata("creator")) {
+//                    event.getPlayer().sendMessage("You cannot place hoppers next to shop's chest.");
+//                    event.setCancelled(true);
+//                    break;
+//                }
+//            }
+//        }
     }
 
     private void removeShop(Block block){
@@ -647,7 +651,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         player.sendMessage("You withdrew "+amount+"$, now your balance is "+balance);
     }
-@EventHandler 
+    @EventHandler
     public void onEntityExplode(EntityExplodeEvent event)
     {
         for(Block block : event.blockList())
@@ -655,6 +659,31 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
              if(block.hasMetadata("creator")){
                  event.blockList().remove(block);
              }
+        }
+    }
+    @EventHandler
+    public void InventoryMoveItemEvent(InventoryMoveItemEvent event)
+    {
+        if(event.getSource().getType().equals(InventoryType.CHEST))
+        {
+            Chest chest = (Chest) event.getSource().getHolder();
+            if(!chest.hasMetadata("creator"))
+            {
+                return;
+            }
+            event.setCancelled(true);
+            return;
+        }
+
+        if(event.getDestination().getType().equals(InventoryType.CHEST))
+        {
+            Chest chest = (Chest) event.getDestination().getHolder();
+            if(!chest.hasMetadata("creator"))
+            {
+                return;
+            }
+            event.setCancelled(true);
+            return;
         }
     }
 }
