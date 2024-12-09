@@ -64,8 +64,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             return;
         }
 
-        if(lines.length < 4){
-            player.sendMessage("Every shop should contains 4 lines. Check the docs.");
+        if(lines.length < 3){
+            player.sendMessage("Every shop should contains 3 lines. Check the docs.");
             return;
         }
 
@@ -109,6 +109,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
         block.setMetadata("price", new FixedMetadataValue(this, price));
 
         String item = lines[3];
+        if(item.equals("")){
+            item = player.getInventory().getItemInMainHand().getType().toString();
+        }
+        lines[3] = item;
+
         block.setMetadata("item", new FixedMetadataValue(this, item));
 
         chest.setMetadata("creator", new FixedMetadataValue(this, player.getUniqueId()));
@@ -118,12 +123,13 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             put("creator", player.getUniqueId().toString());
         }});
 
+        String finalItem = item;
         blockMetadata.put(block.getLocation(), new HashMap<>() {{
             put("shop", true);
             put("shop_type", shopType);
             put("amount", amount);
             put("price", price);
-            put("item", item);
+            put("item", finalItem);
             put("creator", player.getUniqueId().toString());
         }});
 
@@ -181,7 +187,7 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             if(event.getAction() != Action.RIGHT_CLICK_BLOCK){
                 return;
             }
-            if(!block.hasMetadata("shop")){
+            if(!block.hasMetadata("shop") && !block.hasMetadata("admin_shop")){
                 return;
             }
 
@@ -256,6 +262,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
             event.setCancelled(true);
         }
+
+
     }
 
     @Override
