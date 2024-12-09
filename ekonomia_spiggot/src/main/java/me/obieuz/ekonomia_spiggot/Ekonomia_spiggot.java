@@ -151,7 +151,9 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
             playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) + amount);
 
-            player.sendMessage("You withdraw "+amount+"$, now your balance is "+playerValues.get(player.getUniqueId()));
+            Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+
+            player.sendMessage("You deposited "+amount+"$, now your balance is "+balance);
 
         }
 
@@ -209,6 +211,8 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
                 Inventory chestInventory = chest.getInventory();
 
                 if(chestInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
+
+
                     chestInventory.removeItem(new ItemStack(Material.getMaterial(item), amount));
 
                     playerValues.put(player.getUniqueId(), playerValues.get(player.getUniqueId()) - price);
@@ -225,6 +229,11 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
             }
             else if(shopType.contains("sell"))
             {
+                if(playerValues.get(creatorId) < price){
+                player.sendMessage("Owner do not have enough money to buy this item from you");
+                event.setCancelled(true);
+                return;
+            }
                 Inventory playerInventory = player.getInventory();
 
                 if(playerInventory.containsAtLeast(new ItemStack(Material.getMaterial(item), amount), amount)){
@@ -634,7 +643,9 @@ public final class Ekonomia_spiggot extends JavaPlugin implements Listener {
 
         playerValues.put(playerId, playerValues.get(playerId) - amount);
 
-        player.sendMessage("You withdraw "+amount+"$, now your balance is "+playerValues.get(playerId));
+        Integer balance = (int) Math.floor(playerValues.get(player.getUniqueId()));
+
+        player.sendMessage("You withdrew "+amount+"$, now your balance is "+balance);
     }
 @EventHandler 
     public void onEntityExplode(EntityExplodeEvent event)
